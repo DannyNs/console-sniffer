@@ -105,6 +105,24 @@ Add the trigger script to the page you want to control:
 
 The script starts long-polling the server for scenarios. Both scripts can be loaded together or independently.
 
+#### Multi-app routing
+
+When multiple apps use the same console-sniffer server, add a `target` query parameter to the script tag so scenarios are routed to the correct browser:
+
+```html
+<script src="http://<host>:7979/console-trigger.js?target=my-crm"></script>
+```
+
+Then include the matching `target` field when posting a scenario. The server uses strict equality to match — a scenario with `"target": "my-crm"` will only be picked up by a browser whose script tag has `?target=my-crm`. Scenarios and browsers without a `target` are matched together (backward compatible).
+
+| Scenario target | Browser target | Match? |
+|---|---|---|
+| `"my-crm"` | `"my-crm"` | Yes |
+| `"my-crm"` | `"dashboard"` | No |
+| `"my-crm"` | *(none)* | No |
+| *(none)* | `"my-crm"` | No |
+| *(none)* | *(none)* | Yes |
+
 #### LLM workflow
 
 1. **Discover commands** — `GET /api/trigger/commands` returns the full command catalog in a JSON format designed for LLM consumption.
@@ -114,6 +132,7 @@ The script starts long-polling the server for scenarios. Both scripts can be loa
 ```json
 {
   "name": "Join room",
+  "target": "my-crm",
   "steps": [
     { "command": "click", "selector": "#menu-btn" },
     { "command": "waitFor", "selector": ".menu-dropdown" },
@@ -159,4 +178,4 @@ Scenarios are fire-and-forget: once polled by the browser they are removed from 
 | `GET` | `/console-trigger.js` | Serves the UI-automation browser snippet |
 | `GET` | `/api/trigger/commands` | Returns the command catalog (LLM-friendly JSON) |
 | `POST` | `/api/trigger/scenarios` | Submits a scenario for browser execution |
-| `GET` | `/api/trigger/scenarios/poll` | Long-polling endpoint used by `console-trigger.js` |
+| `GET` | `/api/trigger/scenarios/poll?target=...` | Long-polling endpoint used by `console-trigger.js` (optional `target` filter) |
