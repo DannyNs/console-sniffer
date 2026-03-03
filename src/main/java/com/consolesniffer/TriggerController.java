@@ -57,7 +57,8 @@ public class TriggerController {
      * when one is available, or 204 No Content after timeout (~30s).
      */
     @GetMapping("/api/trigger/scenarios/poll")
-    public DeferredResult<ResponseEntity<TriggerScenario>> pollScenario() {
-        return triggerService.pollForScenario();
+    public DeferredResult<ResponseEntity<TriggerScenario>> pollScenario(
+            @RequestParam(required = false) String target) {
+        return triggerService.pollForScenario(target);
     }
 }

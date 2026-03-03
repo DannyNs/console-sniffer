@@ -7,8 +7,6 @@ import org.springframework.web.context.request.async.DeferredResult;
 
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Service
 public class TriggerService {
@@ -16,9 +14,10 @@ public class TriggerService {
     private static final long POLL_TIMEOUT_MS = 30_000;
     private static final long STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
-    private final ConcurrentHashMap<String, TriggerScenario> pendingScenarios = new ConcurrentHashMap<>();
-    private final ConcurrentLinkedQueue<String> scenarioOrder = new ConcurrentLinkedQueue<>();
-    private final ConcurrentLinkedQueue<DeferredResult<ResponseEntity<TriggerScenario>>> waitingPollers = new ConcurrentLinkedQueue<>();
+    private static final String NULL_KEY = "";
+
+    private final Map<String, ArrayDeque<TriggerScenario>> scenariosByTarget = new HashMap<>();
+    private final Map<String, ArrayDeque<DeferredResult<ResponseEntity<TriggerScenario>>>> pollersByTarget = new HashMap<>();
 
     private final Object handshakeLock = new Object();
 
@@ -29,19 +28,24 @@ public class TriggerService {
     public TriggerScenario submitScenario(TriggerScenario scenario) {
         scenario.setId(UUID.randomUUID().toString());
         scenario.setCreatedAt(Instant.now().toString());
+        String key = targetKey(scenario.getTarget());
 
         synchronized (handshakeLock) {
-            // Try to hand off directly to a waiting poller
-            DeferredResult<ResponseEntity<TriggerScenario>> waiter;
-            while ((waiter = waitingPollers.poll()) != null) {
-                if (!waiter.isSetOrExpired()) {
-                    waiter.setResult(ResponseEntity.ok(scenario));
-                    return scenario;
+            // Try to hand off directly to a waiting poller for this target
+            ArrayDeque<DeferredResult<ResponseEntity<TriggerScenario>>> pollers = pollersByTarget.get(key);
+            if (pollers != null) {
+                DeferredResult<ResponseEntity<TriggerScenario>> waiter;
+                while ((waiter = pollers.poll()) != null) {
+                    if (!waiter.isSetOrExpired()) {
+                        if (pollers.isEmpty()) pollersByTarget.remove(key);
+                        waiter.setResult(ResponseEntity.ok(scenario));
+                        return scenario;
+                    }
                 }
+                pollersByTarget.remove(key);
             }
-            // No active poller — queue it
-            pendingScenarios.put(scenario.getId(), scenario);
-            scenarioOrder.offer(scenario.getId());
+            // No matching active poller — queue it
+            scenariosByTarget.computeIfAbsent(key, k -> new ArrayDeque<>()).offer(scenario);
         }
         return scenario;
     }
@@ -50,25 +54,41 @@ public class TriggerService {
      * Long-polling endpoint. Returns immediately if a scenario is queued,
      * otherwise parks the request until a scenario arrives or timeout.
      */
-    public DeferredResult<ResponseEntity<TriggerScenario>> pollForScenario() {
+    public DeferredResult<ResponseEntity<TriggerScenario>> pollForScenario(String target) {
+        String key = targetKey(target);
         DeferredResult<ResponseEntity<TriggerScenario>> result =
                 new DeferredResult<>(POLL_TIMEOUT_MS, ResponseEntity.noContent().build());
 
         synchronized (handshakeLock) {
-            // Drain any stale IDs and find a valid queued scenario
-            TriggerScenario queued = drainNextScenario();
-            if (queued != null) {
-                result.setResult(ResponseEntity.ok(queued));
-                return result;
+            // Check for a queued scenario matching this target
+            ArrayDeque<TriggerScenario> scenarios = scenariosByTarget.get(key);
+            if (scenarios != null) {
+                TriggerScenario queued = scenarios.poll();
+                if (queued != null) {
+                    if (scenarios.isEmpty()) scenariosByTarget.remove(key);
+                    result.setResult(ResponseEntity.ok(queued));
+                    return result;
+                }
+                scenariosByTarget.remove(key);
             }
             // No scenario available — park the poller
-            waitingPollers.offer(result);
+            pollersByTarget.computeIfAbsent(key, k -> new ArrayDeque<>()).offer(result);
         }
 
-        result.onTimeout(() -> waitingPollers.remove(result));
-        result.onCompletion(() -> waitingPollers.remove(result));
+        result.onTimeout(() -> removePoller(key, result));
+        result.onCompletion(() -> removePoller(key, result));
 
         return result;
+    }
+
+    private void removePoller(String key, DeferredResult<ResponseEntity<TriggerScenario>> result) {
+        synchronized (handshakeLock) {
+            ArrayDeque<DeferredResult<ResponseEntity<TriggerScenario>>> pollers = pollersByTarget.get(key);
+            if (pollers != null) {
+                pollers.remove(result);
+                if (pollers.isEmpty()) pollersByTarget.remove(key);
+            }
+        }
     }
 
     /**
@@ -77,13 +97,12 @@ public class TriggerService {
     @Scheduled(fixedRate = 60_000)
     public void cleanupStaleScenarios() {
         Instant cutoff = Instant.now().minusMillis(STALE_THRESHOLD_MS);
-        Iterator<Map.Entry<String, TriggerScenario>> it = pendingScenarios.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<String, TriggerScenario> entry = it.next();
-            Instant created = Instant.parse(entry.getValue().getCreatedAt());
-            if (created.isBefore(cutoff)) {
-                it.remove();
-                scenarioOrder.remove(entry.getKey());
+        synchronized (handshakeLock) {
+            Iterator<Map.Entry<String, ArrayDeque<TriggerScenario>>> mapIt = scenariosByTarget.entrySet().iterator();
+            while (mapIt.hasNext()) {
+                ArrayDeque<TriggerScenario> queue = mapIt.next().getValue();
+                queue.removeIf(s -> Instant.parse(s.getCreatedAt()).isBefore(cutoff));
+                if (queue.isEmpty()) mapIt.remove();
             }
         }
     }
@@ -94,7 +113,7 @@ public class TriggerService {
     public Map<String, Object> getCommandsCatalog() {
         Map<String, Object> catalog = new LinkedHashMap<>();
         catalog.put("description", "Console Trigger DSL — commands for browser UI automation via POST /api/trigger/scenarios");
-        catalog.put("usage", "POST a JSON object with 'name' (string), optional 'description' (string), and 'steps' (array of command objects). Each step must have a 'command' field plus the required parameters listed below. Steps execute sequentially; execution stops on first failure.");
+        catalog.put("usage", "POST a JSON object with 'name' (string), optional 'description' (string), optional 'target' (string), and 'steps' (array of command objects). Each step must have a 'command' field plus the required parameters listed below. Steps execute sequentially; execution stops on first failure. To set the 'target' field: find the console-trigger.js script tag in the app's source code, read the 'target' query parameter from its src attribute (e.g. src=\".../console-trigger.js?target=my-crm\"), and use that exact value. If the script tag has no 'target' parameter, omit the field.");
 
         List<Map<String, Object>> commands = new ArrayList<>();
         commands.add(cmd("click", "Click a DOM element",
@@ -155,15 +174,8 @@ public class TriggerService {
 
     // --- helpers to build the catalog ---
 
-    private TriggerScenario drainNextScenario() {
-        String id;
-        while ((id = scenarioOrder.poll()) != null) {
-            TriggerScenario scenario = pendingScenarios.remove(id);
-            if (scenario != null) {
-                return scenario;
-            }
-        }
-        return null;
+    private static String targetKey(String target) {
+        return (target == null || target.isEmpty()) ? NULL_KEY : target;
     }
 
     private static Map<String, Object> cmd(String name, String description,

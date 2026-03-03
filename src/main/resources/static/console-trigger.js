@@ -23,7 +23,26 @@
     return;
   }
   var serverOrigin = originMatch[1];
+
+  // Extract target from query string (e.g. console-trigger.js?target=my-crm)
+  var triggerTarget = null;
+  var qIdx = fullSrc.indexOf('?');
+  if (qIdx !== -1) {
+    var queryString = fullSrc.substring(qIdx + 1);
+    var pairs = queryString.split('&');
+    for (var p = 0; p < pairs.length; p++) {
+      var kv = pairs[p].split('=');
+      if (decodeURIComponent(kv[0]) === 'target' && kv.length > 1) {
+        triggerTarget = decodeURIComponent(kv[1]);
+        break;
+      }
+    }
+  }
+
   var pollUrl = serverOrigin + '/api/trigger/scenarios/poll';
+  if (triggerTarget) {
+    pollUrl += '?target=' + encodeURIComponent(triggerTarget);
+  }
 
   // ---- 2. Command executors ----
 

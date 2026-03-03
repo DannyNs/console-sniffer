@@ -8,7 +8,11 @@ public class TriggerScenario {
     private String  name;
     private String  description;
     private List<TriggerCommand> steps;
+    private String  target;      // app identifier for multi-app routing
     private String  createdAt;   // ISO 8601, assigned by server
+
+    public String  getTarget()                    { return target; }
+    public void    setTarget(String v)            { this.target = v; }
 
     public String  getId()                        { return id; }
     public void    setId(String v)                { this.id = v; }
