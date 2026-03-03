@@ -1,0 +1,47 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Verify version
+      run: |
+        POM_VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+        echo "pom.xml version: $POM_VERSION"
+
+        # On pull requests: PR version must be higher than base branch version
+        if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          POM_BASE="${POM_VERSION%-SNAPSHOT}"
+          BASE_BRANCH="${GITHUB_BASE_REF}"
+          BASE_POM_VERSION=$(git show "origin/${BASE_BRANCH}:pom.xml" | grep -m1 '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          BASE_POM_BASE="${BASE_POM_VERSION%-SNAPSHOT}"
+          echo "Base branch ($BASE_BRANCH) version: $BASE_POM_VERSION (base: $BASE_POM_BASE)"
+          echo "PR version: $POM_VERSION (base: $POM_BASE)"
+
+          # PR base version must be strictly higher than the base branch base version
+          HIGHEST=$(printf '%s\n%s' "$POM_BASE" "$BASE_POM_BASE" | sort -V | tail -1)
+          if [ "$POM_BASE" = "$BASE_POM_BASE" ] || [ "$HIGHEST" = "$BASE_POM_BASE" ]; then
+            echo "::error::PR version ($POM_BASE) must be higher than base branch version ($BASE_POM_BASE). Bump the version before merging."
+            exit 1
+          fi
+          echo "Version bump check passed: $POM_BASE > $BASE_POM_BASE"
+        fi
+
+    - name: Build with Maven
+      run: mvn -B package --file pom.xml
