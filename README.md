@@ -1,8 +1,8 @@
 # console-sniffer
 
-A lightweight Spring Boot server that captures browser console output to a JSONL log file on disk.
+A lightweight Spring Boot server that captures browser console output to a JSONL log file on disk **and** enables remote UI automation via an LLM-friendly command API.
 
-Drop a single `<script>` tag into any web page and every `console.log`, `console.warn`, `console.error`, uncaught exception, and unhandled promise rejection is forwarded to the server and appended to a file you specify.
+Drop a single `<script>` tag into any web page and every `console.log`, `console.warn`, `console.error`, uncaught exception, and unhandled promise rejection is forwarded to the server and appended to a file you specify. A second script tag enables an LLM (or any HTTP client) to remotely drive browser interactions — clicking buttons, filling forms, waiting for elements — by posting scenario scripts to a REST API.
 
 ## Requirements
 
@@ -30,6 +30,8 @@ java -jar target/console-sniffer.jar --server.port=8080
 ```
 
 ## Usage
+
+### Console Sniffer (log capture)
 
 Add the script tag to the page you want to monitor:
 
@@ -93,6 +95,56 @@ Each event is written as a single JSON line (JSONL). Fields that are not applica
 | `WINDOW_ERROR` | Uncaught exception (`window.onerror`) |
 | `UNHANDLED_REJECTION` | Unhandled promise rejection (`window.addEventListener('unhandledrejection', ...)`) |
 
+### Console Trigger (remote UI automation)
+
+Add the trigger script to the page you want to control:
+
+```html
+<script src="http://<host>:7979/console-trigger.js"></script>
+```
+
+The script starts long-polling the server for scenarios. Both scripts can be loaded together or independently.
+
+#### LLM workflow
+
+1. **Discover commands** — `GET /api/trigger/commands` returns the full command catalog in a JSON format designed for LLM consumption.
+
+2. **Post a scenario** — `POST /api/trigger/scenarios` with a JSON body:
+
+```json
+{
+  "name": "Join room",
+  "steps": [
+    { "command": "click", "selector": "#menu-btn" },
+    { "command": "waitFor", "selector": ".menu-dropdown" },
+    { "command": "click", "selector": ".join-room-btn" },
+    { "command": "waitFor", "selector": "#room-name-input" },
+    { "command": "type", "selector": "#room-name-input", "text": "Test Room" },
+    { "command": "click", "selector": "#confirm-join" },
+    { "command": "assertExists", "selector": ".room-view" }
+  ]
+}
+```
+
+3. **Automatic execution** — The browser picks up the scenario via long polling and executes the steps sequentially.
+
+#### Available commands
+
+| Command | Parameters | Description |
+|---|---|---|
+| `click` | `selector` | Click a DOM element |
+| `dblclick` | `selector` | Double-click a DOM element |
+| `type` | `selector`, `text`, `clear?` | Type text into an input (clears first by default) |
+| `select` | `selector`, `value` | Select a dropdown option by value |
+| `wait` | `ms` | Pause for a fixed delay |
+| `waitFor` | `selector`, `timeout?` | Wait for an element to appear (default 5s) |
+| `waitForHidden` | `selector`, `timeout?` | Wait for an element to disappear |
+| `find` | `selector`, `timeout?` | Locate an element with retry |
+| `assertExists` | `selector` | Assert an element exists in the DOM |
+| `assertText` | `selector`, `text`, `contains?` | Assert element text content |
+
+Scenarios are fire-and-forget: once polled by the browser they are removed from the server. Unpicked scenarios are automatically cleaned up after 5 minutes.
+
 ## Known limitations / TODO
 
 - **Stack trace line numbers**: Line numbers in captured stack traces may differ from what Chrome DevTools displays. DevTools applies source maps when rendering stacks visually, but `new Error().stack` returns the raw transformed/bundled positions. Expect differences when using bundlers such as webpack or Vite.
@@ -101,6 +153,10 @@ Each event is written as a single JSON line (JSONL). Fields that are not applica
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/console-sniffer.js` | Serves the browser snippet |
+| `GET` | `/console-sniffer.js` | Serves the log-capture browser snippet |
 | `POST` | `/api/log` | Appends a log entry (JSON body) |
 | `DELETE` | `/api/log?targetPath=...` | Truncates (clears) the log file |
+| `GET` | `/console-trigger.js` | Serves the UI-automation browser snippet |
+| `GET` | `/api/trigger/commands` | Returns the command catalog (LLM-friendly JSON) |
+| `POST` | `/api/trigger/scenarios` | Submits a scenario for browser execution |
+| `GET` | `/api/trigger/scenarios/poll` | Long-polling endpoint used by `console-trigger.js` |
