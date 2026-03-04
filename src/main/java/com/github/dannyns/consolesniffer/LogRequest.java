@@ -1,4 +1,4 @@
-package com.consolesniffer;
+package com.github.dannyns.consolesniffer;
 
 public class LogRequest {
 

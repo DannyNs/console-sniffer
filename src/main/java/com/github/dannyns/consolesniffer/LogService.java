@@ -1,4 +1,4 @@
-package com.consolesniffer;
+package com.github.dannyns.consolesniffer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;

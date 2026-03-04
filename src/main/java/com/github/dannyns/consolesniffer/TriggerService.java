@@ -1,4 +1,4 @@
-package com.consolesniffer;
+package com.github.dannyns.consolesniffer;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -1,4 +1,4 @@
-package com.consolesniffer;
+package com.github.dannyns.consolesniffer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

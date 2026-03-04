@@ -113,7 +113,7 @@ When multiple apps use the same console-sniffer server, add a `target` query par
 <script src="http://<host>:7979/console-trigger.js?target=my-crm"></script>
 ```
 
-Then include the matching `target` field when posting a scenario. The server uses strict equality to match — a scenario with `"target": "my-crm"` will only be picked up by a browser whose script tag has `?target=my-crm`. Scenarios and browsers without a `target` are matched together (backward compatible).
+Then include the matching `target` field when posting a scenario. The server uses strict equality to match — a scenario with `"target": "my-crm"` will only be picked up by a browser whose script tag has `?target=my-crm`. Scenarios and browsers without a `target` are matched together.
 
 | Scenario target | Browser target | Match? |
 |---|---|---|

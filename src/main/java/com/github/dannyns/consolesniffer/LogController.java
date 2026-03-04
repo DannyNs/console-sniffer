@@ -1,4 +1,4 @@
-package com.consolesniffer;
+package com.github.dannyns.consolesniffer;
 
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
