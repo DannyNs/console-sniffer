@@ -18,5 +18,31 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    - name: Verify SNAPSHOT version
+      run: |
+        POM_VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+        echo "pom.xml version: $POM_VERSION"
+
+        if [[ "$POM_VERSION" != *-SNAPSHOT ]]; then
+          echo "::error::pom.xml version ($POM_VERSION) must contain -SNAPSHOT suffix on main branch."
+          exit 1
+        fi
+
+        BASE_VERSION="${POM_VERSION%-SNAPSHOT}"
+        LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
+
+        if [ -n "$LATEST_TAG" ]; then
+          LATEST_VERSION="${LATEST_TAG#v}"
+          echo "Latest release tag: $LATEST_TAG (version: $LATEST_VERSION)"
+          HIGHEST=$(printf '%s\n%s' "$BASE_VERSION" "$LATEST_VERSION" | sort -V | tail -1)
+          if [ "$HIGHEST" = "$LATEST_VERSION" ]; then
+            echo "::error::SNAPSHOT base version ($BASE_VERSION) must be higher than latest release ($LATEST_VERSION)."
+            exit 1
+          fi
+          echo "Version check passed: $BASE_VERSION > $LATEST_VERSION"
+        else
+          echo "No release tags found, skipping version comparison."
+        fi
+
     - name: Build with Maven
       run: mvn -B package --file pom.xml
