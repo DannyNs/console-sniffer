@@ -1,6 +1,3 @@
-
-
-
 # console-sniffer
 
 A lightweight Spring Boot server that captures browser console output to a JSONL log file on disk **and** enables remote UI automation via an LLM-friendly command API.
