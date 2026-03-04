@@ -20,42 +20,46 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Verify SNAPSHOT version
+    - name: Verify version
       run: |
         POM_VERSION=$(grep -m1 '<version>' pom.xml | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
         echo "pom.xml version: $POM_VERSION"
 
+        # Strip -SNAPSHOT suffix if present to get the base version
+        POM_BASE="${POM_VERSION%-SNAPSHOT}"
+
+        # On push: if this is a release version (no SNAPSHOT), it must match the latest git tag
         if [[ "$POM_VERSION" != *-SNAPSHOT ]]; then
-          echo "::error::pom.xml version ($POM_VERSION) must contain -SNAPSHOT suffix on main branch."
-          exit 1
-        fi
-
-        BASE_VERSION="${POM_VERSION%-SNAPSHOT}"
-        LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
-
-        if [ -n "$LATEST_TAG" ]; then
-          LATEST_VERSION="${LATEST_TAG#v}"
-          echo "Latest release tag: $LATEST_TAG (version: $LATEST_VERSION)"
-          HIGHEST=$(printf '%s\n%s' "$BASE_VERSION" "$LATEST_VERSION" | sort -V | tail -1)
-          if [ "$HIGHEST" = "$LATEST_VERSION" ]; then
-            echo "::error::SNAPSHOT base version ($BASE_VERSION) must be higher than latest release ($LATEST_VERSION)."
+          LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -1)
+          if [ -n "$LATEST_TAG" ]; then
+            LATEST_VERSION="${LATEST_TAG#v}"
+            echo "Release version detected. Latest tag: $LATEST_TAG (version: $LATEST_VERSION)"
+            if [ "$POM_BASE" != "$LATEST_VERSION" ]; then
+              echo "::error::Release version ($POM_BASE) must match latest git tag ($LATEST_VERSION)."
+              exit 1
+            fi
+            echo "Release version check passed: $POM_BASE == $LATEST_VERSION"
+          else
+            echo "::error::Release version ($POM_BASE) found but no git tags exist."
             exit 1
           fi
-          echo "Version check passed: $BASE_VERSION > $LATEST_VERSION"
-        else
-          echo "No release tags found, skipping version comparison."
         fi
 
-        # On pull requests, verify version was bumped compared to the base branch
+        # On pull requests: PR version must be higher than base branch version by at least 0.0.1
         if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
           BASE_BRANCH="${GITHUB_BASE_REF}"
           BASE_POM_VERSION=$(git show "origin/${BASE_BRANCH}:pom.xml" | grep -m1 '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
-          echo "Base branch ($BASE_BRANCH) version: $BASE_POM_VERSION"
-          if [ "$POM_VERSION" = "$BASE_POM_VERSION" ]; then
-            echo "::error::pom.xml version ($POM_VERSION) must be updated compared to base branch ($BASE_BRANCH). Bump the version before merging."
+          BASE_POM_BASE="${BASE_POM_VERSION%-SNAPSHOT}"
+          echo "Base branch ($BASE_BRANCH) version: $BASE_POM_VERSION (base: $BASE_POM_BASE)"
+          echo "PR version: $POM_VERSION (base: $POM_BASE)"
+
+          # PR base version must be strictly higher than the base branch base version
+          HIGHEST=$(printf '%s\n%s' "$POM_BASE" "$BASE_POM_BASE" | sort -V | tail -1)
+          if [ "$POM_BASE" = "$BASE_POM_BASE" ] || [ "$HIGHEST" = "$BASE_POM_BASE" ]; then
+            echo "::error::PR version ($POM_BASE) must be higher than base branch version ($BASE_POM_BASE). Bump the version before merging."
             exit 1
           fi
-          echo "Version bump check passed: $POM_VERSION != $BASE_POM_VERSION"
+          echo "Version bump check passed: $POM_BASE > $BASE_POM_BASE"
         fi
 
     - name: Build with Maven
