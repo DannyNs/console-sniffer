@@ -179,3 +179,4 @@ Scenarios are fire-and-forget: once polled by the browser they are removed from 
 | `GET` | `/api/trigger/commands` | Returns the command catalog (LLM-friendly JSON) |
 | `POST` | `/api/trigger/scenarios` | Submits a scenario for browser execution |
 | `GET` | `/api/trigger/scenarios/poll?target=...` | Long-polling endpoint used by `console-trigger.js` (optional `target` filter) |
+// fake change
