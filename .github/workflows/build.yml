@@ -12,6 +12,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -42,6 +44,18 @@ jobs:
           echo "Version check passed: $BASE_VERSION > $LATEST_VERSION"
         else
           echo "No release tags found, skipping version comparison."
+        fi
+
+        # On pull requests, verify version was bumped compared to the base branch
+        if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          BASE_BRANCH="${GITHUB_BASE_REF}"
+          BASE_POM_VERSION=$(git show "origin/${BASE_BRANCH}:pom.xml" | grep -m1 '<version>' | sed 's/.*<version>\(.*\)<\/version>.*/\1/')
+          echo "Base branch ($BASE_BRANCH) version: $BASE_POM_VERSION"
+          if [ "$POM_VERSION" = "$BASE_POM_VERSION" ]; then
+            echo "::error::pom.xml version ($POM_VERSION) must be updated compared to base branch ($BASE_BRANCH). Bump the version before merging."
+            exit 1
+          fi
+          echo "Version bump check passed: $POM_VERSION != $BASE_POM_VERSION"
         fi
 
     - name: Build with Maven
