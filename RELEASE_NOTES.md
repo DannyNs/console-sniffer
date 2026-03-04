@@ -1,11 +1,3 @@
-# Console Sniffer v0.1.1 — Release Notes
-
-## Changes
-
-- **CI: automatic version from release tag** — the Maven publish workflow now sets the artifact version from the Git release tag, removing the need to manually update `pom.xml` before each release
-
----
-
 # Console Sniffer v0.1.0 — Release Notes
 
 **Initial release** of Console Sniffer, a lightweight Spring Boot server for browser console capture and LLM-driven remote UI automation.
