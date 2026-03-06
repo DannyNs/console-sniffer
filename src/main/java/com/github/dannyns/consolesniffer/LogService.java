@@ -4,11 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedWriter;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,49 +19,46 @@ public class LogService {
     // ObjectMapper is thread-safe after construction — one instance is sufficient.
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public LogService() {
-    }
-
     /**
      * Serialises one LogRequest to a compact JSONL line and appends it to targetPath.
      * Null/blank fields are omitted from the output. targetPath is never written.
      * Jackson escapes embedded newlines in stack traces to \n, preserving JSONL validity.
      */
     public void appendLog(LogRequest request) throws IOException {
-        String targetPath = request.getTargetPath();
+        String targetPath = request.targetPath();
         if (targetPath == null || targetPath.isBlank()) {
             throw new IllegalArgumentException("targetPath must not be blank");
         }
 
-        String effectiveType = (request.getType() != null && !request.getType().isBlank())
-                ? request.getType() : "LOG";
+        String effectiveType = (request.type() != null && !request.type().isBlank())
+                ? request.type() : "LOG";
 
-        String effectiveTs = (request.getTs() != null && !request.getTs().isBlank())
-                ? request.getTs() : java.time.Instant.now().toString();
+        String effectiveTs = (request.ts() != null && !request.ts().isBlank())
+                ? request.ts() : java.time.Instant.now().toString();
 
         // Build ordered map — insertion order becomes field order in the JSON line
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("type",    effectiveType);
-        putIfPresent(map, "session", request.getSession());
-        putIfPresent(map, "seq",     request.getSeq());
+        putIfPresent(map, "session", request.session());
+        putIfPresent(map, "seq",     request.seq());
         map.put("ts",      effectiveTs);
-        putIfPresent(map, "url",     request.getUrl());
-        putIfPresent(map, "ua",      request.getUa());
-        putIfPresent(map, "message", request.getMessage());
-        putIfPresent(map, "source",  request.getSource());
-        putIfPresent(map, "line",    request.getLine());
-        putIfPresent(map, "col",     request.getCol());
-        putIfPresent(map, "stack",   request.getStack());
+        putIfPresent(map, "url",     request.url());
+        putIfPresent(map, "ua",      request.ua());
+        putIfPresent(map, "message", request.message());
+        putIfPresent(map, "source",  request.source());
+        putIfPresent(map, "line",    request.line());
+        putIfPresent(map, "col",     request.col());
+        putIfPresent(map, "stack",   request.stack());
 
         String jsonLine = objectMapper.writeValueAsString(map);
 
         Object lock = fileLocks.computeIfAbsent(targetPath, k -> new Object());
         synchronized (lock) {
-            Path path = Paths.get(targetPath);
+            Path path = Path.of(targetPath);
             if (path.getParent() != null) {
                 Files.createDirectories(path.getParent());
             }
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(path.toFile(), true))) {
+            try (BufferedWriter writer = Files.newBufferedWriter(path, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
                 writer.write(jsonLine);
                 writer.newLine();
             }
@@ -78,11 +74,11 @@ public class LogService {
         }
         Object lock = fileLocks.computeIfAbsent(targetPath, k -> new Object());
         synchronized (lock) {
-            Path path = Paths.get(targetPath);
+            Path path = Path.of(targetPath);
             if (path.getParent() != null) {
                 Files.createDirectories(path.getParent());
             }
-            new FileWriter(path.toFile(), false).close();
+            Files.writeString(path, "", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         }
     }
 
