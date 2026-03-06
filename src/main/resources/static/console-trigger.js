@@ -181,6 +181,16 @@
         }
       }
       return Promise.resolve();
+    },
+
+    logPath: function () {
+      console.log('[console-trigger] Current path: ' + window.location.href);
+      return Promise.resolve();
+    },
+
+    navigate: function (step) {
+      window.location.href = step.path;
+      return Promise.resolve();
     }
   };
 

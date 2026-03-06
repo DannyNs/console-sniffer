@@ -140,7 +140,8 @@ Then include the matching `target` field when posting a scenario. The server use
     { "command": "waitFor", "selector": "#room-name-input" },
     { "command": "type", "selector": "#room-name-input", "text": "Test Room" },
     { "command": "click", "selector": "#confirm-join" },
-    { "command": "assertExists", "selector": ".room-view" }
+    { "command": "assertExists", "selector": ".room-view" },
+    { "command": "logPath" }
   ]
 }
 ```
@@ -161,6 +162,8 @@ Then include the matching `target` field when posting a scenario. The server use
 | `find` | `selector`, `timeout?` | Locate an element with retry |
 | `assertExists` | `selector` | Assert an element exists in the DOM |
 | `assertText` | `selector`, `text`, `contains?` | Assert element text content |
+| `logPath` | *(none)* | Log the current page URL to the console (captured by console-sniffer) |
+| `navigate` | `path` | Navigate the browser to a given URL path |
 
 Scenarios are fire-and-forget: once polled by the browser they are removed from the server. Unpicked scenarios are automatically cleaned up after 5 minutes.
 

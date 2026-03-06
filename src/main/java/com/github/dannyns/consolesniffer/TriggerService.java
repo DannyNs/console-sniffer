@@ -122,7 +122,9 @@ public class TriggerService {
                 field: find the console-trigger.js script tag in the app's source code, read \
                 the 'target' query parameter from its src attribute \
                 (e.g. src=".../console-trigger.js?target=my-crm"), and use that exact value. \
-                If the script tag has no 'target' parameter, omit the field.""");
+                If the script tag has no 'target' parameter, omit the field. \
+                Use 'logPath' to check the current URL (captured by console-sniffer) and \
+                'navigate' to redirect the browser to a different path.""");
 
         List<Map<String, Object>> commands = new ArrayList<>();
         commands.add(cmd("click", "Click a DOM element",
@@ -176,6 +178,15 @@ public class TriggerService {
                        param("contains", "boolean", false, "If true (default), checks substring match. If false, checks exact match.")),
                 List.of(example("assertText", Map.of("selector", ".status", "text", "Success")),
                         example("assertText", Map.of("selector", "h1", "text", "Dashboard", "contains", false)))));
+
+        commands.add(cmd("logPath", "Log the current page URL to the console. The console-sniffer captures it so the backend can check the URL from the log file.",
+                params(),
+                List.of(example("logPath", Map.of()))));
+
+        commands.add(cmd("navigate", "Navigate the browser to a given path",
+                params(param("path", "string", true, "The URL path to navigate to (e.g. /dashboard, /users/123)")),
+                List.of(example("navigate", Map.of("path", "/dashboard")),
+                        example("navigate", Map.of("path", "/settings/profile")))));
 
         catalog.put("commands", commands);
         return catalog;
