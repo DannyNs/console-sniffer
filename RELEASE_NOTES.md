@@ -1,71 +1,24 @@
-# Console Sniffer v0.1.0 — Release Notes
+# Console Sniffer v0.2.0 — Release Notes
 
-**Release Date:** 2026-03-04
+**Release Date:** 2026-03-07
 
-## Overview
+## What's New
 
-Console Sniffer is a lightweight Spring Boot server that captures browser console
-output to JSONL log files on disk and enables LLM-friendly remote UI automation
-via a REST API. Drop a `<script>` tag into any web app — no framework dependencies
-required.
+### Browser Navigation Commands
 
-## Features
+Two new commands have been added to the console trigger automation API:
 
-### Console Log Capture
+- **`logPath`** — Logs the current page URL to the console, which is then
+  captured by console-sniffer for backend inspection. Useful for verifying
+  navigation state during automated scenarios.
+- **`navigate`** — Forces the browser to navigate to a given path via
+  `window.location.href`. Enables multi-page test scenarios without manual
+  intervention.
 
-- Intercepts `console.log`, `.warn`, `.error`, `.info`, and `.debug` calls
-- Captures uncaught exceptions (`window.onerror`) and unhandled Promise rejections
-- Writes structured JSONL to any file path on the server
-- Per-session IDs and monotonic sequence numbers for easy correlation
-- Configurable log levels via the `levels` query parameter
-- Persistent mode to preserve logs across page reloads
-- Thread-safe concurrent writes with per-file locking
+The total built-in command count is now 12.
 
-### Remote UI Automation (Console Trigger)
+## Previous Release
 
-- Long-polling architecture for real-time scenario delivery to the browser
-- 10 built-in commands: `click`, `dblclick`, `type`, `select`, `wait`,
-  `waitFor`, `waitForHidden`, `find`, `assertExists`, `assertText`
-- Multi-app routing via the `target` parameter
-- LLM-friendly command catalog endpoint (`GET /api/trigger/commands`)
-- Exponential backoff on connection errors
-
-### REST API
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/console-sniffer.js` | Serve log-capture snippet |
-| POST | `/api/log` | Receive a log entry |
-| DELETE | `/api/log?targetPath=...` | Clear a log file |
-| GET | `/console-trigger.js` | Serve automation snippet |
-| GET | `/api/trigger/commands` | Command catalog (JSON) |
-| POST | `/api/trigger/scenarios` | Submit a test scenario |
-| GET | `/api/trigger/scenarios/poll` | Long-poll for next scenario |
-
-### Infrastructure
-
-- Spring Boot 3.2.3, Java 17+
-- Single executable JAR (`console-sniffer.jar`)
-- Default port: **7979**
-- CORS enabled for all origins
-- GitHub Actions CI: build verification and version checks
-- GitHub Packages CD: automatic Maven publish on release
-
-## Getting Started
-
-```bash
-# Build
-mvn clean package -DskipTests
-
-# Run
-java -jar target/console-sniffer.jar
-
-# Add to your HTML
-<script src="http://localhost:7979/console-sniffer.js?targetPath=/tmp/app.log"></script>
-<script src="http://localhost:7979/console-trigger.js"></script>
-```
-
-## Known Limitations
-
-- Stack trace line numbers reflect bundled source positions, not original source
-  (source maps are not resolved server-side).
+See [v0.1.0](https://github.com/DannyNs/console-sniffer/releases/tag/v0.1.0)
+for the full initial feature set including console log capture, remote UI
+automation, and REST API documentation.
