@@ -5,6 +5,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.async.DeferredResult;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
@@ -12,7 +13,7 @@ import java.util.*;
 public class TriggerService {
 
     private static final long POLL_TIMEOUT_MS = 30_000;
-    private static final long STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+    private static final long STALE_THRESHOLD_MS = Duration.ofMinutes(5).toMillis();
 
     private static final String NULL_KEY = "";
 
@@ -113,7 +114,15 @@ public class TriggerService {
     public Map<String, Object> getCommandsCatalog() {
         Map<String, Object> catalog = new LinkedHashMap<>();
         catalog.put("description", "Console Trigger DSL — commands for browser UI automation via POST /api/trigger/scenarios");
-        catalog.put("usage", "POST a JSON object with 'name' (string), optional 'description' (string), optional 'target' (string), and 'steps' (array of command objects). Each step must have a 'command' field plus the required parameters listed below. Steps execute sequentially; execution stops on first failure. To set the 'target' field: find the console-trigger.js script tag in the app's source code, read the 'target' query parameter from its src attribute (e.g. src=\".../console-trigger.js?target=my-crm\"), and use that exact value. If the script tag has no 'target' parameter, omit the field.");
+        catalog.put("usage", """
+                POST a JSON object with 'name' (string), optional 'description' (string), \
+                optional 'target' (string), and 'steps' (array of command objects). Each step \
+                must have a 'command' field plus the required parameters listed below. Steps \
+                execute sequentially; execution stops on first failure. To set the 'target' \
+                field: find the console-trigger.js script tag in the app's source code, read \
+                the 'target' query parameter from its src attribute \
+                (e.g. src=".../console-trigger.js?target=my-crm"), and use that exact value. \
+                If the script tag has no 'target' parameter, omit the field.""");
 
         List<Map<String, Object>> commands = new ArrayList<>();
         commands.add(cmd("click", "Click a DOM element",
