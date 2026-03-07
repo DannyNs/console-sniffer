@@ -1,14 +1,11 @@
 package com.github.dannyns.consolesniffer;
 
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @RestController
@@ -18,18 +15,6 @@ public class TriggerController {
 
     public TriggerController(TriggerService triggerService) {
         this.triggerService = triggerService;
-    }
-
-    /**
-     * Serves the JavaScript client so any web app can load it via a script tag.
-     */
-    @GetMapping(value = "/console-trigger.js", produces = "application/javascript")
-    public ResponseEntity<String> serveTriggerJs() throws IOException {
-        ClassPathResource resource = new ClassPathResource("static/console-trigger.js");
-        String content = resource.getContentAsString(StandardCharsets.UTF_8);
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/javascript; charset=UTF-8"))
-                .body(content);
     }
 
     /**

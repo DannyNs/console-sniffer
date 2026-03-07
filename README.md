@@ -2,7 +2,7 @@
 
 A lightweight Spring Boot server that captures browser console output to a JSONL log file on disk **and** enables remote UI automation via an LLM-friendly command API.
 
-Drop a single `<script>` tag into any web page and every `console.log`, `console.warn`, `console.error`, uncaught exception, and unhandled promise rejection is forwarded to the server and appended to a file you specify. A second script tag enables an LLM (or any HTTP client) to remotely drive browser interactions — clicking buttons, filling forms, waiting for elements — by posting scenario scripts to a REST API.
+Drop a single `<script>` tag into any web page and every `console.log`, `console.warn`, `console.error`, uncaught exception, and unhandled promise rejection is forwarded to the server and appended to a file you specify. The same script also starts long-polling for trigger scenarios, enabling an LLM (or any HTTP client) to remotely drive browser interactions — clicking buttons, filling forms, waiting for elements — by posting scenario scripts to a REST API.
 
 ## Requirements
 
@@ -31,20 +31,20 @@ java -jar target/console-sniffer.jar --server.port=8080
 
 ## Usage
 
-### Console Sniffer (log capture)
-
-Add the script tag to the page you want to monitor:
+Add the script tag to the page you want to monitor and control:
 
 ```html
 <script src="http://<host>:7979/console-sniffer.js?targetPath=/path/to/app.log"></script>
 ```
 
+This single script tag enables **both** log capture and trigger-based UI automation. The `targetPath` value serves double duty: it specifies the log file path on the server and acts as the routing key for trigger scenarios.
+
 ### Query parameters
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
-| `targetPath` | yes | — | Absolute path of the log file to write on the server |
-| `persistent` | no | `false` | Set to `true` to keep previous log entries across page reloads; omit to clear the file on each load |
+| `targetPath` | yes | — | Absolute path of the log file to write on the server. Also used as the routing key for trigger scenarios. |
+| `persistent` | no | `false` | Set to `true` to keep previous log entries across page reloads; omit to clear the file on each load. Recommended when using `navigate` commands. |
 | `levels` | no | all | Comma-separated list of event types to capture, e.g. `ERROR,WARN`. Other types are silently dropped (sequence numbers still advance so gaps indicate filtered events) |
 
 ### Example
@@ -95,35 +95,20 @@ Each event is written as a single JSON line (JSONL). Fields that are not applica
 | `WINDOW_ERROR` | Uncaught exception (`window.onerror`) |
 | `UNHANDLED_REJECTION` | Unhandled promise rejection (`window.addEventListener('unhandledrejection', ...)`) |
 
-### Console Trigger (remote UI automation)
+## Remote UI automation (trigger)
 
-Add the trigger script to the page you want to control:
+The script automatically starts long-polling the server for trigger scenarios using the `targetPath` as the routing key.
 
-```html
-<script src="http://<host>:7979/console-trigger.js"></script>
-```
+### Multi-app routing
 
-The script starts long-polling the server for scenarios. Both scripts can be loaded together or independently.
+When multiple apps use the same console-sniffer server, each app's `targetPath` acts as its unique routing key. A scenario with `"target": "/tmp/app.log"` will only be picked up by the browser whose script tag has `?targetPath=/tmp/app.log`.
 
-#### Multi-app routing
-
-When multiple apps use the same console-sniffer server, add a `target` query parameter to the script tag so scenarios are routed to the correct browser:
-
-```html
-<script src="http://<host>:7979/console-trigger.js?target=my-crm"></script>
-```
-
-Then include the matching `target` field when posting a scenario. The server uses strict equality to match — a scenario with `"target": "my-crm"` will only be picked up by a browser whose script tag has `?target=my-crm`. Scenarios and browsers without a `target` are matched together.
-
-| Scenario target | Browser target | Match? |
+| Scenario target | Browser targetPath | Match? |
 |---|---|---|
-| `"my-crm"` | `"my-crm"` | Yes |
-| `"my-crm"` | `"dashboard"` | No |
-| `"my-crm"` | *(none)* | No |
-| *(none)* | `"my-crm"` | No |
-| *(none)* | *(none)* | Yes |
+| `"/tmp/app.log"` | `"/tmp/app.log"` | Yes |
+| `"/tmp/app.log"` | `"/tmp/other.log"` | No |
 
-#### LLM workflow
+### LLM workflow
 
 1. **Discover commands** — `GET /api/trigger/commands` returns the full command catalog in a JSON format designed for LLM consumption.
 
@@ -132,7 +117,7 @@ Then include the matching `target` field when posting a scenario. The server use
 ```json
 {
   "name": "Join room",
-  "target": "my-crm",
+  "target": "/tmp/app.log",
   "steps": [
     { "command": "click", "selector": "#menu-btn" },
     { "command": "waitFor", "selector": ".menu-dropdown" },
@@ -146,9 +131,11 @@ Then include the matching `target` field when posting a scenario. The server use
 }
 ```
 
+The `target` value must match the `targetPath` from the browser's script tag.
+
 3. **Automatic execution** — The browser picks up the scenario via long polling and executes the steps sequentially.
 
-#### Available commands
+### Available commands
 
 | Command | Parameters | Description |
 |---|---|---|
@@ -169,9 +156,9 @@ Then include the matching `target` field when posting a scenario. The server use
 
 Scenarios are fire-and-forget: once polled by the browser they are removed from the server. Unpicked scenarios are automatically cleaned up after 5 minutes.
 
-#### Navigate resilience (localStorage persistence)
+### Navigate resilience (localStorage persistence)
 
-When a scenario contains a `navigate` step, the page reloads and the in-memory scenario state would normally be lost. To handle this, `console-trigger.js` automatically saves scenario progress to `localStorage` before each navigation and resumes execution after the new page loads.
+When a scenario contains a `navigate` step, the page reloads and the in-memory scenario state would normally be lost. To handle this, the script automatically saves scenario progress to `localStorage` before each navigation and resumes execution after the new page loads.
 
 **How it works:**
 - Before each step (and specifically before `navigate`), progress is saved to `localStorage` with the index of the next step to run.
@@ -181,9 +168,9 @@ When a scenario contains a `navigate` step, the page reloads and the in-memory s
 
 **Limitations:**
 - **Same-origin only** — `localStorage` is scoped to the origin. If `navigate` redirects to a different origin, the saved state is inaccessible and the scenario cannot resume.
-- **Requires `console-trigger.js` on the target page** — The destination page must also include the `console-trigger.js` script tag for resumption to work.
+- **Requires `console-sniffer.js` on the target page** — The destination page must also include the `console-sniffer.js` script tag for resumption to work.
 
-**Recommendation:** When using `navigate` in scenarios, add `persistent=true` to the `console-sniffer.js` script tag to prevent the log file from being cleared on page reload:
+**Recommendation:** When using `navigate` in scenarios, add `persistent=true` to the script tag to prevent the log file from being cleared on page reload:
 
 ```html
 <script src="http://<host>:7979/console-sniffer.js?targetPath=/tmp/app.log&persistent=true"></script>
@@ -197,11 +184,9 @@ When a scenario contains a `navigate` step, the page reloads and the in-memory s
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/console-sniffer.js` | Serves the log-capture browser snippet |
+| `GET` | `/console-sniffer.js` | Serves the unified browser snippet (log capture + trigger) |
 | `POST` | `/api/log` | Appends a log entry (JSON body) |
 | `DELETE` | `/api/log?targetPath=...` | Truncates (clears) the log file |
-| `GET` | `/console-trigger.js` | Serves the UI-automation browser snippet |
 | `GET` | `/api/trigger/commands` | Returns the command catalog (LLM-friendly JSON) |
 | `POST` | `/api/trigger/scenarios` | Submits a scenario for browser execution |
-| `GET` | `/api/trigger/scenarios/poll?target=...` | Long-polling endpoint used by `console-trigger.js` (optional `target` filter) |
-
+| `GET` | `/api/trigger/scenarios/poll?target=...` | Long-polling endpoint used by `console-sniffer.js` (`target` = the `targetPath` value) |

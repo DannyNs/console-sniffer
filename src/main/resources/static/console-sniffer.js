@@ -1,15 +1,17 @@
 (function () {
   'use strict';
 
-  // ---- 1. Locate this script tag to extract serverOrigin, targetPath, persistent ----
+  // ---- 1. Shared: Locate script tag, extract origin & params ----
 
-  var scriptEl = null;
-  var scripts = document.getElementsByTagName('script');
-  for (var i = 0; i < scripts.length; i++) {
-    var src = scripts[i].getAttribute('src') || '';
-    if (src.indexOf('console-sniffer.js') !== -1) {
-      scriptEl = scripts[i];
-      break;
+  var scriptEl = document.currentScript;
+  if (!scriptEl) {
+    var scripts = document.getElementsByTagName('script');
+    for (var i = 0; i < scripts.length; i++) {
+      var src = scripts[i].getAttribute('src') || '';
+      if (src.indexOf('console-sniffer.js') !== -1) {
+        scriptEl = scripts[i];
+        break;
+      }
     }
   }
 
@@ -54,10 +56,10 @@
     return;
   }
 
+  // ---- 2. Sniffer module ----
+
   var apiUrl = serverOrigin + '/api/log';
   var clearUrl = serverOrigin + '/api/log?targetPath=' + encodeURIComponent(targetPath);
-
-  // ---- 2. Generate session ID (8 hex chars, one per page load) ----
 
   function generateSessionId() {
     if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
@@ -71,15 +73,11 @@
   var sessionId = generateSessionId();
   var seqCounter = 0;
 
-  // ---- 3. Clear the log file on load (unless persistent mode) ----
-
   if (!persistent) {
     try {
       fetch(clearUrl, { method: 'DELETE' }).catch(function () {});
     } catch (e) {}
   }
-
-  // ---- 4. Emit SESSION_START ----
 
   try {
     fetch(apiUrl, {
@@ -97,8 +95,6 @@
       })
     }).catch(function () {});
   } catch (e) {}
-
-  // ---- 5. Utility: format console arguments to a single string ----
 
   function formatArgs(args) {
     var parts = [];
@@ -120,8 +116,6 @@
     }
     return parts.join(' ');
   }
-
-  // ---- 6. Send a log entry to the server ----
 
   function sendLog(type, message, extra) {
     if (Object.keys(allowedTypes).length > 0 && !allowedTypes[type]) {
@@ -154,13 +148,12 @@
     } catch (e) {}
   }
 
-  // ---- 7. Intercept console methods ----
-
   function captureStack() {
     try {
       var raw = new Error().stack || '';
       var lines = raw.split('\n').filter(function (l) {
-        return l.trim() !== '' && l.trim() !== 'Error' && l.indexOf('console-sniffer.js') === -1;
+        return l.trim() !== '' && l.trim() !== 'Error'
+            && l.indexOf('console-sniffer.js') === -1;
       });
       return lines.length > 0 ? lines.join('\n') : undefined;
     } catch (e) {
@@ -185,8 +178,6 @@
     };
   });
 
-  // ---- 8. Capture uncaught errors (structured fields) ----
-
   var previousOnError = window.onerror;
   window.onerror = function (message, source, lineno, colno, error) {
     sendLog('WINDOW_ERROR', String(message), {
@@ -201,8 +192,6 @@
     return false;
   };
 
-  // ---- 9. Capture unhandled promise rejections (stack as separate field) ----
-
   window.addEventListener('unhandledrejection', function (event) {
     var reason = event.reason;
     var msg;
@@ -216,5 +205,311 @@
     }
     sendLog('UNHANDLED_REJECTION', msg, { stack: stack });
   });
+
+  // ---- 3. Trigger module ----
+
+  var pollUrl = serverOrigin + '/api/trigger/scenarios/poll?target=' + encodeURIComponent(targetPath);
+
+  var DEFAULT_TIMEOUT = 5000;
+
+  var LS_KEY = 'cs-trigger-scenario';
+
+  function saveProgress(scenario, nextStepIndex) {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        scenarioId: scenario.id,
+        scenarioName: scenario.name,
+        steps: scenario.steps,
+        nextStepIndex: nextStepIndex,
+        target: scenario.target || null,
+        savedAt: new Date().toISOString()
+      }));
+    } catch (e) {
+      console.warn('[console-trigger] Cannot save progress to localStorage: ' + e.message);
+    }
+  }
+
+  function clearProgress() {
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  function loadProgress() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (data.savedAt) {
+        var elapsed = Date.now() - new Date(data.savedAt).getTime();
+        if (elapsed > 5 * 60 * 1000) {
+          localStorage.removeItem(LS_KEY);
+          return null;
+        }
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function resolveElement(selector) {
+    var el = document.querySelector(selector);
+    if (!el) {
+      throw new Error('Element not found: ' + selector);
+    }
+    return el;
+  }
+
+  function waitForElement(selector, timeout) {
+    var deadline = Date.now() + (timeout || DEFAULT_TIMEOUT);
+    return new Promise(function (resolve, reject) {
+      var check = function () {
+        var el = document.querySelector(selector);
+        if (el) {
+          resolve(el);
+        } else if (Date.now() >= deadline) {
+          reject(new Error('Timed out waiting for element: ' + selector));
+        } else {
+          setTimeout(check, 50);
+        }
+      };
+      check();
+    });
+  }
+
+  function waitForHidden(selector, timeout) {
+    var deadline = Date.now() + (timeout || DEFAULT_TIMEOUT);
+    return new Promise(function (resolve, reject) {
+      var check = function () {
+        var el = document.querySelector(selector);
+        if (!el || el.offsetParent === null) {
+          resolve();
+        } else if (Date.now() >= deadline) {
+          reject(new Error('Timed out waiting for element to hide: ' + selector));
+        } else {
+          setTimeout(check, 50);
+        }
+      };
+      check();
+    });
+  }
+
+  function dispatchInputEvents(el) {
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  var executors = {
+    click: function (step) {
+      var el = resolveElement(step.selector);
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      return Promise.resolve();
+    },
+
+    dblclick: function (step) {
+      var el = resolveElement(step.selector);
+      el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+      return Promise.resolve();
+    },
+
+    type: function (step) {
+      var el = resolveElement(step.selector);
+      var shouldClear = step.clear !== false; // default true
+      if (shouldClear) {
+        var nativeSetter = Object.getOwnPropertyDescriptor(
+          Object.getPrototypeOf(el).constructor.prototype || HTMLInputElement.prototype, 'value'
+        );
+        if (nativeSetter && nativeSetter.set) {
+          nativeSetter.set.call(el, '');
+        } else {
+          el.value = '';
+        }
+        dispatchInputEvents(el);
+      }
+      var setter = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(el).constructor.prototype || HTMLInputElement.prototype, 'value'
+      );
+      if (setter && setter.set) {
+        setter.set.call(el, step.text || '');
+      } else {
+        el.value = step.text || '';
+      }
+      dispatchInputEvents(el);
+      return Promise.resolve();
+    },
+
+    select: function (step) {
+      var el = resolveElement(step.selector);
+      el.value = step.value;
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return Promise.resolve();
+    },
+
+    wait: function (step) {
+      return new Promise(function (resolve) {
+        setTimeout(resolve, step.ms || 0);
+      });
+    },
+
+    waitFor: function (step) {
+      return waitForElement(step.selector, step.timeout);
+    },
+
+    waitForHidden: function (step) {
+      return waitForHidden(step.selector, step.timeout);
+    },
+
+    find: function (step) {
+      return waitForElement(step.selector, step.timeout);
+    },
+
+    assertExists: function (step) {
+      resolveElement(step.selector);
+      return Promise.resolve();
+    },
+
+    assertText: function (step) {
+      var el = resolveElement(step.selector);
+      var actual = (el.textContent || '').trim();
+      var expected = step.text || '';
+      var isContains = step.contains !== false; // default true
+      if (isContains) {
+        if (actual.indexOf(expected) === -1) {
+          throw new Error('assertText failed: "' + actual + '" does not contain "' + expected + '"');
+        }
+      } else {
+        if (actual !== expected) {
+          throw new Error('assertText failed: expected "' + expected + '" but got "' + actual + '"');
+        }
+      }
+      return Promise.resolve();
+    },
+
+    logPath: function () {
+      console.log('[console-trigger] Current path: ' + window.location.href);
+      return Promise.resolve();
+    },
+
+    logBody: function () {
+      console.log('[console-trigger] Current body HTML: ' + document.body.innerHTML);
+      return Promise.resolve();
+    },
+
+    logHead: function () {
+      console.log('[console-trigger] Current head HTML: ' + document.head.innerHTML);
+      return Promise.resolve();
+    },
+
+    navigate: function (step, scenario, stepIndex) {
+      saveProgress(scenario, stepIndex + 1);
+      window.location.href = step.path;
+      return new Promise(function () {});
+    }
+  };
+
+  function runScenario(scenario, startIndex) {
+    var steps = scenario.steps || [];
+    var i = startIndex || 0;
+
+    function nextStep() {
+      if (i >= steps.length) {
+        return Promise.resolve();
+      }
+      var step = steps[i];
+      var currentIndex = i;
+      i++;
+      var executor = executors[step.command];
+      if (!executor) {
+        return Promise.reject(new Error('Unknown command: ' + step.command));
+      }
+      try {
+        return executor(step, scenario, currentIndex).then(function () {
+          saveProgress(scenario, i);
+          return nextStep();
+        });
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    }
+
+    saveProgress(scenario, i);
+    return nextStep().then(function () {
+      clearProgress();
+    }, function (err) {
+      clearProgress();
+      throw err;
+    });
+  }
+
+  var retryDelay = 2000;
+  var maxRetryDelay = 30000;
+
+  function pollLoop() {
+    fetch(pollUrl).then(function (response) {
+      if (response.status === 204) {
+        retryDelay = 2000;
+        pollLoop();
+        return;
+      }
+      if (!response.ok) {
+        throw new Error('Poll returned status ' + response.status);
+      }
+      return response.json();
+    }).then(function (scenario) {
+      if (!scenario) {
+        return;
+      }
+      retryDelay = 2000;
+      return runScenario(scenario).then(function () {
+        console.log('[console-trigger] Scenario completed: ' + (scenario.name || scenario.id));
+      }).catch(function (err) {
+        console.error('[console-trigger] Scenario failed: ' + err.message);
+      }).then(function () {
+        pollLoop();
+      });
+    }).catch(function (err) {
+      console.warn('[console-trigger] Poll error, retrying in ' + retryDelay + 'ms: ' + err.message);
+      setTimeout(function () {
+        retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+        pollLoop();
+      }, retryDelay);
+    });
+  }
+
+  function tryResumeScenario() {
+    var saved = loadProgress();
+    if (!saved) return false;
+    var savedTarget = saved.target || null;
+    if (savedTarget !== targetPath) {
+      clearProgress();
+      return false;
+    }
+    if (!saved.steps || saved.nextStepIndex >= saved.steps.length) {
+      clearProgress();
+      return false;
+    }
+    console.log('[console-trigger] Resuming scenario "' + (saved.scenarioName || saved.scenarioId) + '" from step ' + saved.nextStepIndex);
+    var scenario = {
+      id: saved.scenarioId,
+      name: saved.scenarioName,
+      steps: saved.steps,
+      target: saved.target
+    };
+    runScenario(scenario, saved.nextStepIndex).then(function () {
+      console.log('[console-trigger] Scenario completed: ' + (scenario.name || scenario.id));
+    }).catch(function (err) {
+      console.error('[console-trigger] Scenario failed: ' + err.message);
+    }).then(function () {
+      pollLoop();
+    });
+    return true;
+  }
+
+  if (!tryResumeScenario()) {
+    pollLoop();
+  }
 
 })();
