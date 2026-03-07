@@ -123,8 +123,10 @@ public class TriggerService {
                 the 'target' query parameter from its src attribute \
                 (e.g. src=".../console-trigger.js?target=my-crm"), and use that exact value. \
                 If the script tag has no 'target' parameter, omit the field. \
-                Use 'logPath' to check the current URL (captured by console-sniffer) and \
-                'navigate' to redirect the browser to a different path.""");
+                Use 'logPath' to check the current URL, 'logBody' and 'logHead' to inspect \
+                the rendered HTML (all captured by console-sniffer), and 'navigate' to \
+                redirect the browser to a different path. When using 'navigate', scenario \
+                state is automatically persisted to localStorage and resumed after page reload.""");
 
         List<Map<String, Object>> commands = new ArrayList<>();
         commands.add(cmd("click", "Click a DOM element",
@@ -182,6 +184,14 @@ public class TriggerService {
         commands.add(cmd("logPath", "Log the current page URL to the console. The console-sniffer captures it so the backend can check the URL from the log file.",
                 params(),
                 List.of(example("logPath", Map.of()))));
+
+        commands.add(cmd("logBody", "Log the current page body HTML to the console. The console-sniffer captures it so the backend can inspect the rendered DOM body.",
+                params(),
+                List.of(example("logBody", Map.of()))));
+
+        commands.add(cmd("logHead", "Log the current page head HTML to the console. The console-sniffer captures it so the backend can inspect the page head element.",
+                params(),
+                List.of(example("logHead", Map.of()))));
 
         commands.add(cmd("navigate", "Navigate the browser to a given path",
                 params(param("path", "string", true, "The URL path to navigate to (e.g. /dashboard, /users/123)")),

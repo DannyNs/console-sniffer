@@ -48,6 +48,51 @@
 
   var DEFAULT_TIMEOUT = 5000;
 
+  // ---- localStorage helpers for scenario persistence across navigations ----
+
+  var LS_KEY = 'cs-trigger-scenario';
+
+  function saveProgress(scenario, nextStepIndex) {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        scenarioId: scenario.id,
+        scenarioName: scenario.name,
+        steps: scenario.steps,
+        nextStepIndex: nextStepIndex,
+        target: scenario.target || null,
+        savedAt: new Date().toISOString()
+      }));
+    } catch (e) {
+      console.warn('[console-trigger] Cannot save progress to localStorage: ' + e.message);
+    }
+  }
+
+  function clearProgress() {
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  function loadProgress() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (data.savedAt) {
+        var elapsed = Date.now() - new Date(data.savedAt).getTime();
+        if (elapsed > 5 * 60 * 1000) {
+          localStorage.removeItem(LS_KEY);
+          return null;
+        }
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function resolveElement(selector) {
     var el = document.querySelector(selector);
     if (!el) {
@@ -188,36 +233,57 @@
       return Promise.resolve();
     },
 
-    navigate: function (step) {
-      window.location.href = step.path;
+    logBody: function () {
+      console.log('[console-trigger] Current body HTML: ' + document.body.innerHTML);
       return Promise.resolve();
+    },
+
+    logHead: function () {
+      console.log('[console-trigger] Current head HTML: ' + document.head.innerHTML);
+      return Promise.resolve();
+    },
+
+    navigate: function (step, scenario, stepIndex) {
+      saveProgress(scenario, stepIndex + 1);
+      window.location.href = step.path;
+      return new Promise(function () {});
     }
   };
 
   // ---- 3. Scenario runner ----
 
-  function runScenario(scenario) {
+  function runScenario(scenario, startIndex) {
     var steps = scenario.steps || [];
-    var i = 0;
+    var i = startIndex || 0;
 
     function nextStep() {
       if (i >= steps.length) {
         return Promise.resolve();
       }
       var step = steps[i];
+      var currentIndex = i;
       i++;
       var executor = executors[step.command];
       if (!executor) {
         return Promise.reject(new Error('Unknown command: ' + step.command));
       }
       try {
-        return executor(step).then(nextStep);
+        return executor(step, scenario, currentIndex).then(function () {
+          saveProgress(scenario, i);
+          return nextStep();
+        });
       } catch (e) {
         return Promise.reject(e);
       }
     }
 
-    return nextStep();
+    saveProgress(scenario, i);
+    return nextStep().then(function () {
+      clearProgress();
+    }, function (err) {
+      clearProgress();
+      throw err;
+    });
   }
 
   // ---- 4. Long polling loop ----
@@ -258,8 +324,40 @@
     });
   }
 
-  // ---- 5. Start polling ----
+  // ---- 5. Resume saved scenario or start polling ----
 
-  pollLoop();
+  function tryResumeScenario() {
+    var saved = loadProgress();
+    if (!saved) return false;
+    var savedTarget = saved.target || null;
+    var currentTarget = triggerTarget || null;
+    if (savedTarget !== currentTarget) {
+      clearProgress();
+      return false;
+    }
+    if (!saved.steps || saved.nextStepIndex >= saved.steps.length) {
+      clearProgress();
+      return false;
+    }
+    console.log('[console-trigger] Resuming scenario "' + (saved.scenarioName || saved.scenarioId) + '" from step ' + saved.nextStepIndex);
+    var scenario = {
+      id: saved.scenarioId,
+      name: saved.scenarioName,
+      steps: saved.steps,
+      target: saved.target
+    };
+    runScenario(scenario, saved.nextStepIndex).then(function () {
+      console.log('[console-trigger] Scenario completed: ' + (scenario.name || scenario.id));
+    }).catch(function (err) {
+      console.error('[console-trigger] Scenario failed: ' + err.message);
+    }).then(function () {
+      pollLoop();
+    });
+    return true;
+  }
+
+  if (!tryResumeScenario()) {
+    pollLoop();
+  }
 
 })();

@@ -1,7 +1,7 @@
 package com.github.dannyns.consolesniffer;
 
 public record TriggerCommand(
-        String  command,   // click, dblclick, type, select, wait, waitFor, waitForHidden, find, assertExists, assertText, logPath, navigate
+        String  command,   // click, dblclick, type, select, wait, waitFor, waitForHidden, find, assertExists, assertText, logPath, logBody, logHead, navigate
         String  selector,  // CSS selector for the target element
         String  text,      // text to type or assert
         String  value,     // value for select command
