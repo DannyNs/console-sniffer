@@ -163,9 +163,31 @@ Then include the matching `target` field when posting a scenario. The server use
 | `assertExists` | `selector` | Assert an element exists in the DOM |
 | `assertText` | `selector`, `text`, `contains?` | Assert element text content |
 | `logPath` | *(none)* | Log the current page URL to the console (captured by console-sniffer) |
+| `logBody` | *(none)* | Log the current page body HTML to the console (captured by console-sniffer) |
+| `logHead` | *(none)* | Log the current page head HTML to the console (captured by console-sniffer) |
 | `navigate` | `path` | Navigate the browser to a given URL path |
 
 Scenarios are fire-and-forget: once polled by the browser they are removed from the server. Unpicked scenarios are automatically cleaned up after 5 minutes.
+
+#### Navigate resilience (localStorage persistence)
+
+When a scenario contains a `navigate` step, the page reloads and the in-memory scenario state would normally be lost. To handle this, `console-trigger.js` automatically saves scenario progress to `localStorage` before each navigation and resumes execution after the new page loads.
+
+**How it works:**
+- Before each step (and specifically before `navigate`), progress is saved to `localStorage` with the index of the next step to run.
+- On page load, the script checks for saved state and resumes the scenario from where it left off.
+- On scenario completion or failure, the saved state is cleared.
+- Saved state older than **5 minutes** is automatically discarded (e.g. if a tab is closed mid-scenario).
+
+**Limitations:**
+- **Same-origin only** — `localStorage` is scoped to the origin. If `navigate` redirects to a different origin, the saved state is inaccessible and the scenario cannot resume.
+- **Requires `console-trigger.js` on the target page** — The destination page must also include the `console-trigger.js` script tag for resumption to work.
+
+**Recommendation:** When using `navigate` in scenarios, add `persistent=true` to the `console-sniffer.js` script tag to prevent the log file from being cleared on page reload:
+
+```html
+<script src="http://<host>:7979/console-sniffer.js?targetPath=/tmp/app.log&persistent=true"></script>
+```
 
 ## Known limitations / TODO
 
