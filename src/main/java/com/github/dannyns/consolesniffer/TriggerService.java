@@ -116,17 +116,17 @@ public class TriggerService {
         catalog.put("description", "Console Trigger DSL — commands for browser UI automation via POST /api/trigger/scenarios");
         catalog.put("usage", """
                 POST a JSON object with 'name' (string), optional 'description' (string), \
-                optional 'target' (string), and 'steps' (array of command objects). Each step \
+                'target' (string), and 'steps' (array of command objects). Each step \
                 must have a 'command' field plus the required parameters listed below. Steps \
-                execute sequentially; execution stops on first failure. To set the 'target' \
-                field: find the console-trigger.js script tag in the app's source code, read \
-                the 'target' query parameter from its src attribute \
-                (e.g. src=".../console-trigger.js?target=my-crm"), and use that exact value. \
-                If the script tag has no 'target' parameter, omit the field. \
+                execute sequentially; execution stops on first failure. The 'target' field \
+                is the 'targetPath' value from the console-sniffer.js script tag's src attribute \
+                (e.g. src=".../console-sniffer.js?targetPath=/tmp/app.log" means use \
+                "target": "/tmp/app.log"). \
                 Use 'logPath' to check the current URL, 'logBody' and 'logHead' to inspect \
                 the rendered HTML (all captured by console-sniffer), and 'navigate' to \
                 redirect the browser to a different path. When using 'navigate', scenario \
-                state is automatically persisted to localStorage and resumed after page reload.""");
+                state is automatically persisted to localStorage and resumed after page reload. \
+                It is recommended to use persistent=true on the script tag when using 'navigate'.""");
 
         List<Map<String, Object>> commands = new ArrayList<>();
         commands.add(cmd("click", "Click a DOM element",
