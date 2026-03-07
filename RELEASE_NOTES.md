@@ -1,24 +1,25 @@
-# Console Sniffer v0.2.0 — Release Notes
+# Console Sniffer v0.3.0 — Release Notes
 
 **Release Date:** 2026-03-07
 
 ## What's New
 
-### Browser Navigation Commands
+### HTML Inspection Commands
 
-Two new commands have been added to the console trigger automation API:
+- **`logBody`** — Logs `document.body.innerHTML` to the console, captured by
+  console-sniffer so LLMs can inspect the rendered DOM body.
+- **`logHead`** — Logs `document.head.innerHTML` to the console, captured by
+  console-sniffer so LLMs can inspect the page head element.
 
-- **`logPath`** — Logs the current page URL to the console, which is then
-  captured by console-sniffer for backend inspection. Useful for verifying
-  navigation state during automated scenarios.
-- **`navigate`** — Forces the browser to navigate to a given path via
-  `window.location.href`. Enables multi-page test scenarios without manual
-  intervention.
+### localStorage Scenario Persistence
 
-The total built-in command count is now 12.
+Scenarios that include `navigate` steps now survive page reloads. Progress is
+saved to `localStorage` before each navigation and automatically resumed on the
+target page. Saved state expires after 5 minutes.
 
-## Previous Release
+The total built-in command count is now 14.
 
-See [v0.1.0](https://github.com/DannyNs/console-sniffer/releases/tag/v0.1.0)
-for the full initial feature set including console log capture, remote UI
-automation, and REST API documentation.
+## Previous Releases
+
+- [v0.2.0](https://github.com/DannyNs/console-sniffer/releases/tag/v0.2.0) — `logPath` and `navigate` commands
+- [v0.1.0](https://github.com/DannyNs/console-sniffer/releases/tag/v0.1.0) — Initial release
