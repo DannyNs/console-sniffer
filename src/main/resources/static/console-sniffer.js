@@ -354,7 +354,7 @@
       return waitForElementHidden(step.selector, step.timeout);
     },
 
-    find: function (step) {
+    find: function (step) {  // alias for waitFor
       return waitForElement(step.selector, step.timeout);
     },
 
