@@ -165,7 +165,7 @@ public class TriggerService {
                        param("timeout", "integer", false, "Max wait time in ms (default: 5000)")),
                 List.of(example("waitForHidden", Map.of("selector", ".loading-spinner")))));
 
-        commands.add(cmd("find", "Locate a DOM element, retrying until found or timeout. Use to verify an element exists before acting on it.",
+        commands.add(cmd("find", "Alias for waitFor — locate a DOM element, retrying until found or timeout.",
                 params(param("selector", "string", true, "CSS selector for the element"),
                        param("timeout", "integer", false, "Max wait time in ms (default: 5000)")),
                 List.of(example("find", Map.of("selector", "#main-content")))));

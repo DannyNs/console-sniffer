@@ -225,7 +225,7 @@
         savedAt: new Date().toISOString()
       }));
     } catch (e) {
-      console.warn('[console-trigger] Cannot save progress to localStorage: ' + e.message);
+      console.warn('[console-sniffer] Cannot save progress to localStorage: ' + e.message);
     }
   }
 
@@ -280,7 +280,7 @@
     });
   }
 
-  function waitForHidden(selector, timeout) {
+  function waitForElementHidden(selector, timeout) {
     var deadline = Date.now() + (timeout || DEFAULT_TIMEOUT);
     return new Promise(function (resolve, reject) {
       var check = function () {
@@ -317,26 +317,18 @@
 
     type: function (step) {
       var el = resolveElement(step.selector);
-      var shouldClear = step.clear !== false; // default true
-      if (shouldClear) {
-        var nativeSetter = Object.getOwnPropertyDescriptor(
-          Object.getPrototypeOf(el).constructor.prototype || HTMLInputElement.prototype, 'value'
-        );
-        if (nativeSetter && nativeSetter.set) {
-          nativeSetter.set.call(el, '');
-        } else {
-          el.value = '';
-        }
-        dispatchInputEvents(el);
-      }
-      var setter = Object.getOwnPropertyDescriptor(
+      var descriptor = Object.getOwnPropertyDescriptor(
         Object.getPrototypeOf(el).constructor.prototype || HTMLInputElement.prototype, 'value'
       );
-      if (setter && setter.set) {
-        setter.set.call(el, step.text || '');
-      } else {
-        el.value = step.text || '';
+      var setValue = (descriptor && descriptor.set)
+        ? function (v) { descriptor.set.call(el, v); }
+        : function (v) { el.value = v; };
+
+      if (step.clear !== false) {
+        setValue('');
+        dispatchInputEvents(el);
       }
+      setValue(step.text || '');
       dispatchInputEvents(el);
       return Promise.resolve();
     },
@@ -359,10 +351,10 @@
     },
 
     waitForHidden: function (step) {
-      return waitForHidden(step.selector, step.timeout);
+      return waitForElementHidden(step.selector, step.timeout);
     },
 
-    find: function (step) {
+    find: function (step) {  // alias for waitFor
       return waitForElement(step.selector, step.timeout);
     },
 
@@ -389,17 +381,17 @@
     },
 
     logPath: function () {
-      console.log('[console-trigger] Current path: ' + window.location.href);
+      console.log('[console-sniffer] Current path: ' + window.location.href);
       return Promise.resolve();
     },
 
     logBody: function () {
-      console.log('[console-trigger] Current body HTML: ' + document.body.innerHTML);
+      console.log('[console-sniffer] Current body HTML: ' + document.body.innerHTML);
       return Promise.resolve();
     },
 
     logHead: function () {
-      console.log('[console-trigger] Current head HTML: ' + document.head.innerHTML);
+      console.log('[console-sniffer] Current head HTML: ' + document.head.innerHTML);
       return Promise.resolve();
     },
 
@@ -462,14 +454,14 @@
       }
       retryDelay = 2000;
       return runScenario(scenario).then(function () {
-        console.log('[console-trigger] Scenario completed: ' + (scenario.name || scenario.id));
+        console.log('[console-sniffer] Scenario completed: ' + (scenario.name || scenario.id));
       }).catch(function (err) {
-        console.error('[console-trigger] Scenario failed: ' + err.message);
+        console.error('[console-sniffer] Scenario failed: ' + err.message);
       }).then(function () {
         pollLoop();
       });
     }).catch(function (err) {
-      console.warn('[console-trigger] Poll error, retrying in ' + retryDelay + 'ms: ' + err.message);
+      console.warn('[console-sniffer] Poll error, retrying in ' + retryDelay + 'ms: ' + err.message);
       setTimeout(function () {
         retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
         pollLoop();
@@ -489,7 +481,7 @@
       clearProgress();
       return false;
     }
-    console.log('[console-trigger] Resuming scenario "' + (saved.scenarioName || saved.scenarioId) + '" from step ' + saved.nextStepIndex);
+    console.log('[console-sniffer] Resuming scenario "' + (saved.scenarioName || saved.scenarioId) + '" from step ' + saved.nextStepIndex);
     var scenario = {
       id: saved.scenarioId,
       name: saved.scenarioName,
@@ -497,9 +489,9 @@
       target: saved.target
     };
     runScenario(scenario, saved.nextStepIndex).then(function () {
-      console.log('[console-trigger] Scenario completed: ' + (scenario.name || scenario.id));
+      console.log('[console-sniffer] Scenario completed: ' + (scenario.name || scenario.id));
     }).catch(function (err) {
-      console.error('[console-trigger] Scenario failed: ' + err.message);
+      console.error('[console-sniffer] Scenario failed: ' + err.message);
     }).then(function () {
       pollLoop();
     });
