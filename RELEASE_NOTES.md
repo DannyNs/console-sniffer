@@ -1,44 +1,47 @@
-# Console Sniffer v0.4.0 — Release Notes
+# Console Sniffer v0.4.7 — Release Notes
 
-**Release Date:** 2026-03-07
+**Release Date:** 2026-03-08
 
-## What's New
+Code quality and cleanup release — seven fixes addressing best-practice
+violations found during a comprehensive code review.
 
-### Unified Script
+## Changes
 
-`console-trigger.js` has been merged into `console-sniffer.js`. A single
-`<script>` tag now provides both log capture and trigger-based UI automation:
+### Server-side
 
-```html
-<script src="http://<host>:7979/console-sniffer.js?targetPath=/tmp/app.log"></script>
-```
+- **Remove redundant `serveJs()` endpoint** — Spring Boot already serves static
+  files from `src/main/resources/static/` with HTTP caching and 304 support.
+  The explicit `@GetMapping("/console-sniffer.js")` in `LogController` bypassed
+  all of this; it has been removed. (#18)
 
-### `targetPath` as Trigger Routing Key
+- **Remove extra blank line in `LogService.java`** — Formatting cleanup. (#13)
 
-The `targetPath` query parameter now serves double duty — it specifies the log
-file path on the server **and** acts as the routing key for trigger scenarios.
-The separate `target` query parameter on `console-trigger.js` is no longer
-needed.
+### Client-side (`console-sniffer.js`)
 
-When posting a scenario, set the `target` field to the `targetPath` value from
-the script tag:
+- **Rename `[console-trigger]` log prefixes to `[console-sniffer]`** — After
+  the v0.4.0 merge, all JS log messages still used the old `[console-trigger]`
+  prefix. Now consistently `[console-sniffer]`. (#16)
 
-```json
-{ "target": "/tmp/app.log", "steps": [...] }
-```
+- **Extract duplicated native setter lookup in `type` executor** — The
+  `Object.getOwnPropertyDescriptor(...)` call for the value setter was
+  duplicated in the clear and set phases. Extracted into a single lookup with
+  a shared `setValue` helper. (#15)
 
-### Breaking Changes
+- **Rename `waitForHidden` helper to avoid shadowing executor key** — The free
+  function `waitForHidden` and `executors.waitForHidden` shared the same name.
+  The helper is now `waitForElementHidden`. (#19)
 
-- **`/console-trigger.js` endpoint removed** — The separate JS file and its
-  serving endpoint no longer exist. Update any script tags that reference
-  `console-trigger.js` to use `console-sniffer.js` with a `targetPath` parameter
-  instead.
-- **`target` query parameter removed** — Trigger routing is now driven by
-  `targetPath`. Scenarios must use the `targetPath` value as their `target`
-  field.
+- **Document `find` command as alias for `waitFor`** — Both call the same
+  underlying `waitForElement` function. Added a clarifying comment and updated
+  the command catalog description. (#14)
+
+- **Remove unnecessary per-step `saveProgress` calls** — `saveProgress` was
+  called after every step but is only needed before `navigate`. Removes
+  unnecessary `localStorage` writes during scenario execution. (#17)
 
 ## Previous Releases
 
+- [v0.4.0](https://github.com/DannyNs/console-sniffer/releases/tag/v0.4.0) — Unified script (`console-trigger.js` merged into `console-sniffer.js`)
 - [v0.3.0](https://github.com/DannyNs/console-sniffer/releases/tag/v0.3.0) — `logBody`/`logHead` commands and localStorage persistence
 - [v0.2.0](https://github.com/DannyNs/console-sniffer/releases/tag/v0.2.0) — `logPath` and `navigate` commands
 - [v0.1.0](https://github.com/DannyNs/console-sniffer/releases/tag/v0.1.0) — Initial release
