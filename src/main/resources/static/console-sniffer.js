@@ -317,26 +317,18 @@
 
     type: function (step) {
       var el = resolveElement(step.selector);
-      var shouldClear = step.clear !== false; // default true
-      if (shouldClear) {
-        var nativeSetter = Object.getOwnPropertyDescriptor(
-          Object.getPrototypeOf(el).constructor.prototype || HTMLInputElement.prototype, 'value'
-        );
-        if (nativeSetter && nativeSetter.set) {
-          nativeSetter.set.call(el, '');
-        } else {
-          el.value = '';
-        }
-        dispatchInputEvents(el);
-      }
-      var setter = Object.getOwnPropertyDescriptor(
+      var descriptor = Object.getOwnPropertyDescriptor(
         Object.getPrototypeOf(el).constructor.prototype || HTMLInputElement.prototype, 'value'
       );
-      if (setter && setter.set) {
-        setter.set.call(el, step.text || '');
-      } else {
-        el.value = step.text || '';
+      var setValue = (descriptor && descriptor.set)
+        ? function (v) { descriptor.set.call(el, v); }
+        : function (v) { el.value = v; };
+
+      if (step.clear !== false) {
+        setValue('');
+        dispatchInputEvents(el);
       }
+      setValue(step.text || '');
       dispatchInputEvents(el);
       return Promise.resolve();
     },
