@@ -1,4 +1,4 @@
-# Console Sniffer v0.4.8 — Release Notes
+# Console Sniffer v0.5.0 — Release Notes
 
 **Release Date:** 2026-03-08
 
