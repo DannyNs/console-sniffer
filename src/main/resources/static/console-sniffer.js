@@ -280,7 +280,7 @@
     });
   }
 
-  function waitForHidden(selector, timeout) {
+  function waitForElementHidden(selector, timeout) {
     var deadline = Date.now() + (timeout || DEFAULT_TIMEOUT);
     return new Promise(function (resolve, reject) {
       var check = function () {
@@ -351,7 +351,7 @@
     },
 
     waitForHidden: function (step) {
-      return waitForHidden(step.selector, step.timeout);
+      return waitForElementHidden(step.selector, step.timeout);
     },
 
     find: function (step) {
