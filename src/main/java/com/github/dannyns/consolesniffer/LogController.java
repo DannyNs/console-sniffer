@@ -1,13 +1,11 @@
 package com.github.dannyns.consolesniffer;
 
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 @RestController
 public class LogController {
@@ -16,18 +14,6 @@ public class LogController {
 
     public LogController(LogService logService) {
         this.logService = logService;
-    }
-
-    /**
-     * Serves the JavaScript snippet so any web app can load it via a <script> tag.
-     */
-    @GetMapping(value = "/console-sniffer.js", produces = "application/javascript")
-    public ResponseEntity<String> serveJs() throws IOException {
-        ClassPathResource resource = new ClassPathResource("static/console-sniffer.js");
-        String content = resource.getContentAsString(StandardCharsets.UTF_8);
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/javascript; charset=UTF-8"))
-                .body(content);
     }
 
     /**

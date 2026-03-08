@@ -88,5 +88,4 @@ public class LogService {
         map.put(key, value);
     }
 
-
 }
