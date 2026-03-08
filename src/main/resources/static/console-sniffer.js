@@ -419,7 +419,6 @@
       }
       try {
         return executor(step, scenario, currentIndex).then(function () {
-          saveProgress(scenario, i);
           return nextStep();
         });
       } catch (e) {
@@ -427,7 +426,6 @@
       }
     }
 
-    saveProgress(scenario, i);
     return nextStep().then(function () {
       clearProgress();
     }, function (err) {
