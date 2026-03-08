@@ -184,7 +184,7 @@ When a scenario contains a `navigate` step, the page reloads and the in-memory s
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/console-sniffer.js` | Serves the unified browser snippet (log capture + trigger) |
+| `GET` | `/console-sniffer.js` | Static resource — unified browser snippet (log capture + trigger) |
 | `POST` | `/api/log` | Appends a log entry (JSON body) |
 | `DELETE` | `/api/log?targetPath=...` | Truncates (clears) the log file |
 | `GET` | `/api/trigger/commands` | Returns the command catalog (LLM-friendly JSON) |

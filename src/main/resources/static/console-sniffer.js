@@ -225,7 +225,7 @@
         savedAt: new Date().toISOString()
       }));
     } catch (e) {
-      console.warn('[console-trigger] Cannot save progress to localStorage: ' + e.message);
+      console.warn('[console-sniffer] Cannot save progress to localStorage: ' + e.message);
     }
   }
 
@@ -381,17 +381,17 @@
     },
 
     logPath: function () {
-      console.log('[console-trigger] Current path: ' + window.location.href);
+      console.log('[console-sniffer] Current path: ' + window.location.href);
       return Promise.resolve();
     },
 
     logBody: function () {
-      console.log('[console-trigger] Current body HTML: ' + document.body.innerHTML);
+      console.log('[console-sniffer] Current body HTML: ' + document.body.innerHTML);
       return Promise.resolve();
     },
 
     logHead: function () {
-      console.log('[console-trigger] Current head HTML: ' + document.head.innerHTML);
+      console.log('[console-sniffer] Current head HTML: ' + document.head.innerHTML);
       return Promise.resolve();
     },
 
@@ -456,14 +456,14 @@
       }
       retryDelay = 2000;
       return runScenario(scenario).then(function () {
-        console.log('[console-trigger] Scenario completed: ' + (scenario.name || scenario.id));
+        console.log('[console-sniffer] Scenario completed: ' + (scenario.name || scenario.id));
       }).catch(function (err) {
-        console.error('[console-trigger] Scenario failed: ' + err.message);
+        console.error('[console-sniffer] Scenario failed: ' + err.message);
       }).then(function () {
         pollLoop();
       });
     }).catch(function (err) {
-      console.warn('[console-trigger] Poll error, retrying in ' + retryDelay + 'ms: ' + err.message);
+      console.warn('[console-sniffer] Poll error, retrying in ' + retryDelay + 'ms: ' + err.message);
       setTimeout(function () {
         retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
         pollLoop();
@@ -483,7 +483,7 @@
       clearProgress();
       return false;
     }
-    console.log('[console-trigger] Resuming scenario "' + (saved.scenarioName || saved.scenarioId) + '" from step ' + saved.nextStepIndex);
+    console.log('[console-sniffer] Resuming scenario "' + (saved.scenarioName || saved.scenarioId) + '" from step ' + saved.nextStepIndex);
     var scenario = {
       id: saved.scenarioId,
       name: saved.scenarioName,
@@ -491,9 +491,9 @@
       target: saved.target
     };
     runScenario(scenario, saved.nextStepIndex).then(function () {
-      console.log('[console-trigger] Scenario completed: ' + (scenario.name || scenario.id));
+      console.log('[console-sniffer] Scenario completed: ' + (scenario.name || scenario.id));
     }).catch(function (err) {
-      console.error('[console-trigger] Scenario failed: ' + err.message);
+      console.error('[console-sniffer] Scenario failed: ' + err.message);
     }).then(function () {
       pollLoop();
     });
